@@ -1,12 +1,13 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 import sqlite3
+import asyncio
 
 # Telegram Bot Token
 TOKEN = 'YOUR_BOT_TOKEN'
 
 # Function to start a conversation and register a user
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     username = update.message.from_user.username
 
@@ -24,14 +25,14 @@ def start(update: Update, context: CallbackContext):
         cursor.execute("INSERT INTO users (id, username, referral_link) VALUES (?, ?, ?)",
                        (user_id, username, referral_link))
         conn.commit()
-        update.message.reply_text(f"Welcome, {username}! Your referral link is: {referral_link}")
+        await update.message.reply_text(f"Welcome, {username}! Your referral link is: {referral_link}")
     else:
-        update.message.reply_text(f"Welcome back, {username}! Your referral link is: {user[2]}")
+        await update.message.reply_text(f"Welcome back, {username}! Your referral link is: {user[2]}")
 
     conn.close()
 
 # Function to display the help command
-def help_command(update: Update, context: CallbackContext):
+async def help_command(update: Update, context: CallbackContext):
     help_text = (
         "Welcome to the Referral Bot!\n\n"
         "Available commands:\n"
@@ -40,10 +41,10 @@ def help_command(update: Update, context: CallbackContext):
         "/myreferrals - See how many people you've referred\n"
         "/leaderboard - View the top referrers"
     )
-    update.message.reply_text(help_text)
+    await update.message.reply_text(help_text)
 
 # Function to show the number of referrals
-def myreferrals(update: Update, context: CallbackContext):
+async def myreferrals(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
 
     conn = sqlite3.connect('referral_bot.db')
@@ -52,10 +53,10 @@ def myreferrals(update: Update, context: CallbackContext):
     referral_count = cursor.fetchone()[0]
     conn.close()
 
-    update.message.reply_text(f"You have referred {referral_count} people.")
+    await update.message.reply_text(f"You have referred {referral_count} people.")
 
 # Function to show the leaderboard
-def leaderboard(update: Update, context: CallbackContext):
+async def leaderboard(update: Update, context: CallbackContext):
     conn = sqlite3.connect('referral_bot.db')
     cursor = conn.cursor()
     cursor.execute("SELECT username, COUNT(*) as referrals FROM users GROUP BY referred_by ORDER BY referrals DESC LIMIT 10")
@@ -66,10 +67,10 @@ def leaderboard(update: Update, context: CallbackContext):
     for index, (username, referrals) in enumerate(top_referrers, start=1):
         leaderboard_text += f"{index}. {username} - {referrals} referrals\n"
 
-    update.message.reply_text(leaderboard_text)
+    await update.message.reply_text(leaderboard_text)
 
 # Function to handle referrals using the referral link
-def referral(update: Update, context: CallbackContext):
+async def referral(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     referred_by_user_id = None
 
@@ -88,13 +89,13 @@ def referral(update: Update, context: CallbackContext):
             # Register the referral
             cursor.execute("UPDATE users SET referred_by=? WHERE id=?", (referrer[2], user_id))
             conn.commit()
-            update.message.reply_text(f"Referral successful! You were referred by {referrer[1]}")
+            await update.message.reply_text(f"Referral successful! You were referred by {referrer[1]}")
         else:
-            update.message.reply_text("Invalid referral link. Please check again.")
+            await update.message.reply_text("Invalid referral link. Please check again.")
 
         conn.close()
     else:
-        update.message.reply_text("Please provide a valid referral link.")
+        await update.message.reply_text("Please provide a valid referral link.")
 
 # Setup the bot
 async def main():
@@ -105,10 +106,11 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("myreferrals", myreferrals))
     application.add_handler(CommandHandler("leaderboard", leaderboard))
-    application.add_handler(CommandHandler("referral", referral, pass_args=True))
+    application.add_handler(CommandHandler("referral", referral))  # Updated referral handler
 
+    # Start polling for updates
     await application.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
     asyncio.run(main())
+
