@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackContext
 import sqlite3
 
 # Telegram Bot Token
@@ -97,20 +97,18 @@ def referral(update: Update, context: CallbackContext):
         update.message.reply_text("Please provide a valid referral link.")
 
 # Setup the bot
-def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+async def main():
+    application = Application.builder().token(TOKEN).build()
 
     # Adding new command handlers
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help_command))
-    dp.add_handler(CommandHandler("myreferrals", myreferrals))
-    dp.add_handler(CommandHandler("leaderboard", leaderboard))
-    dp.add_handler(CommandHandler("referral", referral, pass_args=True))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("myreferrals", myreferrals))
+    application.add_handler(CommandHandler("leaderboard", leaderboard))
+    application.add_handler(CommandHandler("referral", referral, pass_args=True))
 
-    updater.start_polling()
-    updater.idle()
+    await application.run_polling()
 
 if __name__ == '__main__':
-    main()
-
+    import asyncio
+    asyncio.run(main())
