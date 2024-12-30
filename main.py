@@ -1,69 +1,114 @@
-import os
+import logging
 import random
 import string
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-from dotenv import load_dotenv
-from database import init_db, add_user, check_referral_code, increment_referrals, get_referrals
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import ConversationHandler
 
-# Load environment variables
-load_dotenv()
+# Set up logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Telegram Bot Token
-TOKEN = os.getenv("TELEGRAM_TOKEN")
+# Global variables
+users = {}
+referrals = {}
 
-# Initialize the database
-init_db()
+# States for the conversation
+REFERRAL = 1
+JOINED = 2
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    username = update.effective_user.username or "Anonymous"
+# Command to start the bot and ask for referral code
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Welcome! Please provide a referral code if you have one, or type /skip if you don't.")
+    return REFERRAL
+
+# Generate unique referral code
+def generate_referral_code():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+# Handle the referral code entered by the new user
+def referral(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    referral_code = update.message.text.strip().upper()
+
+    if referral_code == "/skip":
+        # If no referral code is entered, skip and add the user
+        referral_code = None
+        update.message.reply_text("No referral code entered, you will join without a referrer.")
+    elif referral_code in referrals:
+        # Valid referral code, add the user to the referrer's list
+        referrals[referral_code].append(user_id)
+        update.message.reply_text(f"Referral code {referral_code} applied. You will be added to the group soon!")
+    else:
+        update.message.reply_text("Invalid referral code! Please try again or type /skip to skip.")
+        return REFERRAL  # Wait for the user to try again
     
-    # Generate a unique referral code
-    referral_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    # Generate the new user's referral code
+    user_referral_code = generate_referral_code()
+    users[user_id] = user_referral_code
+    referrals[user_referral_code] = []  # Initialize referral list for this user
+    update.message.reply_text(f"Your referral code is {user_referral_code}. Share it with others to earn rewards!")
     
-    # Add user to the database
-    add_user(user_id, username, referral_code)
+    # Proceed with adding the user to the group after this
+    update.message.reply_text("You have been successfully registered! You will now be added to the group.")
     
-    await update.message.reply_text(
-        f"Welcome, {username}!\n"
-        f"Your referral code is: `{referral_code}`\n"
-        f"Share this code with your friends to earn rewards!",
-        parse_mode="Markdown"
+    return JOINED
+
+# Handle the /skip command if no referral code is entered
+def skip(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    # Generate the new user's referral code
+    user_referral_code = generate_referral_code()
+    users[user_id] = user_referral_code
+    referrals[user_referral_code] = []  # Initialize referral list for this user
+    update.message.reply_text(f"You have been successfully registered without a referral code! Your referral code is {user_referral_code}. Share it with others to earn rewards!")
+    
+    # Proceed with adding the user to the group
+    update.message.reply_text("You will now be added to the group.")
+    
+    return JOINED
+
+# Handle the /referrals command to show the number of referrals
+def referrals_count(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    user_referral_code = users.get(user_id)
+
+    if user_referral_code:
+        # Count how many users have used the current user's referral code
+        referral_count = len(referrals[user_referral_code])
+        update.message.reply_text(f"You have referred {referral_count} user(s) using the code {user_referral_code}.")
+    else:
+        update.message.reply_text("You haven't registered yet! Please start by typing /start.")
+
+# To handle the user's successful joining
+def join_group(update: Update, context: CallbackContext):
+    update.message.reply_text("Welcome to the group!")
+    # Here you can add code to invite the user to the actual Telegram group (manual or via invite link)
+
+    return ConversationHandler.END
+
+# Define the main function to set up the bot
+def main():
+    updater = Updater("YOUR_BOT_TOKEN", use_context=True)
+    dp = updater.dispatcher
+
+    # Set up the conversation handler
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            REFERRAL: [MessageHandler(Filters.text & ~Filters.command, referral)],
+            JOINED: [CommandHandler('skip', skip)],
+        },
+        fallbacks=[],
     )
 
-async def referral(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    args = context.args
-    if len(args) == 1:
-        referred_code = args[0]
-        user_id = update.effective_user.id
-        
-        # Check if the referral code exists and avoid self-referral
-        referred_user = check_referral_code(referred_code)
-        if referred_user and referred_user[0] != user_id:
-            increment_referrals(referred_user[0])
-            await update.message.reply_text("Referral successful!")
-        else:
-            await update.message.reply_text("Invalid or self-referral code!")
-    else:
-        await update.message.reply_text("Please provide a valid referral code.")
+    # Add the new /referrals command handler
+    dp.add_handler(CommandHandler('referrals', referrals_count))
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    referrals = get_referrals(user_id)
-    await update.message.reply_text(f"You have {referrals} successful referrals.")
+    dp.add_handler(conv_handler)
+    updater.start_polling()
+    updater.idle()
 
-def main():
-    # Create the Application instance
-    application = Application.builder().token(TOKEN).build()
-
-    # Add command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("referral", referral))
-    application.add_handler(CommandHandler("stats", stats))
-
-    # Run the bot
-    application.run_polling()
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
