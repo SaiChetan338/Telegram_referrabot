@@ -2,7 +2,8 @@ import logging
 import random
 import string
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext
+from telegram.ext import filters
 from telegram.ext import ConversationHandler
 
 # Set up logging
@@ -97,7 +98,7 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            REFERRAL: [MessageHandler(Filters.text & ~Filters.command, referral)],
+            REFERRAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, referral)],
             JOINED: [CommandHandler('skip', skip)],
         },
         fallbacks=[],
