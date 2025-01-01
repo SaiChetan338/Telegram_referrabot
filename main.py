@@ -3,7 +3,8 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from database import init_db, add_or_get_user, get_referrals
 import asyncio
 
-# Command to generate and show the referral link
+
+
 async def referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     username = update.effective_user.username or "Unknown"
