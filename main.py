@@ -1,45 +1,45 @@
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
-from database import init_db, add_or_get_user, increment_referrals, get_referrals
+from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes
+import sqlite3
 
-# Command: Start
-def start(update: Update, context: CallbackContext):
-    user = update.effective_user
-    referral_code = add_or_get_user(user.id, user.username or "Anonymous")
-    update.message.reply_text(f"Welcome {user.first_name}!\nYour referral code is: {referral_code}\n"
-                              f"Share it to earn rewards!")
+# Import database-related functions
+from database import initialize_database, get_referral_code, increment_referral_count, get_leaderboard
 
-# Command: Referral
-def referral(update: Update, context: CallbackContext):
-    if context.args:
-        referred_code = context.args[0]
-        increment_referrals(referred_code)
-        update.message.reply_text("Thanks for using a referral code!")
-    else:
-        update.message.reply_text("Please provide a valid referral code after the /referral command.")
+# Replace 'YOUR_BOT_TOKEN' with your actual bot token
+bot_token = "YOUR_BOT_TOKEN"
 
-# Command: Stats
-def stats(update: Update, context: CallbackContext):
-    user = update.effective_user
-    referral_count = get_referrals(user.id)
-    update.message.reply_text(f"You have referred {referral_count} users!")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Welcome to the referral bot! Use /referral to get your referral code.")
 
-# Main function
+async def referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    referral_code = get_referral_code(user_id)
+    referral_count = increment_referral_count(user_id, 0)  # Retrieve without incrementing
+    await update.message.reply_text(
+        f"Your Referral Code: {referral_code}\nTotal Referrals: {referral_count}"
+    )
+
+async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    leaderboard_data = get_leaderboard()
+    leaderboard_text = "🏆 Leaderboard 🏆\n" + "\n".join(
+        [f"{i+1}. {name} - {count} referrals" for i, (name, count) in enumerate(leaderboard_data)]
+    )
+    await update.message.reply_text(leaderboard_text)
+
 def main():
-    init_db()
+    # Initialize the database
+    initialize_database()
 
-    # Replace 'YOUR_BOT_TOKEN' with your Telegram bot token
-    bot_token = "YOUR_BOT_TOKEN"
-    updater = Updater(bot_token)
-    dispatcher = updater.dispatcher
+    # Create the application
+    app = ApplicationBuilder().token(bot_token).build()
 
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("referral", referral))
-    dispatcher.add_handler(CommandHandler("stats", stats))
+    # Add command handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("referral", referral))
+    app.add_handler(CommandHandler("leaderboard", leaderboard))
 
-    updater.start_polling()
-    updater.idle()
+    # Run the bot
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
-
