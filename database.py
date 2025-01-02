@@ -2,7 +2,7 @@ import sqlite3
 import uuid
 
 # Initialize the database
-def init_db():
+def initialize_database():
     conn = sqlite3.connect("referral_bot.db")
     cursor = conn.cursor()
     cursor.execute("""
@@ -17,7 +17,7 @@ def init_db():
     conn.close()
 
 # Add a new user or get an existing user's referral code
-def add_or_get_user(user_id, username):
+def get_referral_code(user_id, username):
     conn = sqlite3.connect("referral_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT referral_code FROM users WHERE id = ?", (user_id,))
@@ -33,7 +33,7 @@ def add_or_get_user(user_id, username):
     return referral_code
 
 # Increment referral count
-def increment_referrals(referral_code):
+def increment_referral_count(referral_code):
     conn = sqlite3.connect("referral_bot.db")
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET referrals = referrals + 1 WHERE referral_code = ?", (referral_code,))
@@ -41,7 +41,7 @@ def increment_referrals(referral_code):
     conn.close()
 
 # Get referral stats
-def get_referrals(user_id):
+def get_leaderboard(user_id):
     conn = sqlite3.connect("referral_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT referrals FROM users WHERE id = ?", (user_id,))
