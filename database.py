@@ -1,7 +1,7 @@
 import sqlite3
 import uuid
 
-# Initialize the database
+# Initialize
 def init_db():
     conn = sqlite3.connect("referral_bot.db")
     cursor = conn.cursor()
